@@ -1,0 +1,7 @@
+# Extra dependency for the Streamlit UI (streamlit_app.py) only.
+# Not needed for the Gradio HF Space (see requirements.txt) — kept
+# separate so the Space's install stays minimal.
+#
+# streamlit>=1.35 is required for st.audio_input (native mic widget).
+
+streamlit>=1.35,<2.0

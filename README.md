@@ -59,6 +59,19 @@ Opens `http://127.0.0.1:7860`. First inference triggers the MERaLiON
 load (~30 s on CPU, ~9 s on GPU at FP16). On hosts with < 1.5 GiB
 free RAM, the adapter refuses to load — close other apps and retry.
 
+### Alternate UI: Streamlit
+
+`streamlit_app.py` is a second front-end on the `streamlit-ui` branch,
+sharing the same `src/inference.py` backend as the Gradio app — same
+model, same predictions, different presentation.
+
+```bash
+.venv/bin/pip install -r requirements-streamlit.txt
+.venv/bin/streamlit run streamlit_app.py
+```
+
+Opens `http://localhost:8501`.
+
 ### GPU runs
 
 On a CUDA-capable host (RTX 4050 etc.), install a CUDA-matched torch
