@@ -1,0 +1,28 @@
+# Pinned for Hugging Face Spaces free tier (cpu-basic, Python 3.11).
+# Do NOT pin `torch==X.Y.Z+cpu` — HF Space's image handles the CPU build.
+# Keep this list minimal: every dep here is downloaded and cached.
+
+# Core ML
+torch>=2.1,<3.0
+# numpy <2.0 keeps the prebuilt manylinux wheels; numpy 2.x requires a
+# C build (meson) which fails on machines without python-dev headers.
+numpy>=1.24,<2.0
+huggingface-hub>=0.20,<1.0
+# MERaLiON-SER-v1 is loaded via trust_remote_code=True; its custom
+# modeling file needs transformers + peft (LoRA) + omegaconf directly,
+# and peft hard-imports accelerate internally even though nothing here
+# calls it directly.
+transformers>=4.40,<6.0
+peft>=0.10,<1.0
+omegaconf>=2.3,<3.0
+accelerate>=0.30,<2.0
+
+# Audio
+soundfile>=0.12,<1.0
+PyYAML>=6.0,<7.0
+
+# UI
+gradio>=5.0,<6.0
+
+# Tests (not installed on HF Space, but used locally)
+pytest>=8.0,<9.0

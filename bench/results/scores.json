@@ -1,0 +1,18 @@
+{
+  "meralion-ser-v1": {
+    "model_id": "meralion-ser-v1",
+    "accuracy": 0.4025,
+    "macro_f1": 0.407,
+    "num_samples": 400,
+    "eligible_for_deploy": false,
+    "per_class_f1": {
+      "happy": 0.3097,
+      "neutral": 0.4952,
+      "sad": 0.3259,
+      "angry": 0.497
+    },
+    "notes": "Full ViSEC bench on device=cuda dtype=float16, failed_clips=0, avg_latency_ms=69.0",
+    "device": "cuda",
+    "dtype": "float16"
+  }
+}

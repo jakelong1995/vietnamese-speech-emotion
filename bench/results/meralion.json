@@ -1,0 +1,58 @@
+{
+  "model_id": "meralion-ser-v1",
+  "label_set": [
+    "happy",
+    "neutral",
+    "sad",
+    "angry"
+  ],
+  "num_samples": 400,
+  "accuracy": 0.4025,
+  "precision": {
+    "happy": 0.4364,
+    "neutral": 0.4727,
+    "sad": 0.2588,
+    "angry": 0.6308
+  },
+  "recall": {
+    "happy": 0.24,
+    "neutral": 0.52,
+    "sad": 0.44,
+    "angry": 0.41
+  },
+  "f1": {
+    "happy": 0.3097,
+    "neutral": 0.4952,
+    "sad": 0.3259,
+    "angry": 0.497
+  },
+  "confusion": [
+    [
+      24,
+      19,
+      46,
+      11
+    ],
+    [
+      9,
+      52,
+      31,
+      8
+    ],
+    [
+      21,
+      30,
+      44,
+      5
+    ],
+    [
+      1,
+      9,
+      49,
+      41
+    ]
+  ],
+  "macro_f1": 0.407,
+  "weighted_f1": 0.407,
+  "notes": "per_class=100, seed=0, failed_clips=0, avg_latency_ms=69.0, 4cls aggregation: argmax over 4 mapped ViSEC labels (predictions on fearful/disgusted/surprised counted as wrong)"
+}
