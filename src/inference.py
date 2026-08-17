@@ -1,4 +1,4 @@
-"""Inference layer — single-model Gradio Space wrapper around MERaLiON-SER-v1.
+"""Inference layer — single-model Streamlit app wrapper around MERaLiON-SER-v1.
 
 The Space ships with exactly one emotion model. There is one adapter
 loaded in memory at a time, lazy-loaded on first inference call.

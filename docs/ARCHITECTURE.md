@@ -12,10 +12,10 @@
 ```
 ┌────────────────────────────────────────────────────────────────┐
 │  Tầng 1 — PRESENTATION                                         │
-│  app.py (Gradio)                                               │
-│  - Markdown header / footer                                    │
+│  streamlit_app.py (Streamlit)                                  │
+│  - Title + caption + bench banner                              │
 │  - 3 tab input: Upload / Microphone / Samples                  │
-│  - Result card + Bar plot                                      │
+│  - Result hero (emotion + confidence) + probability bars       │
 └─────────────────────────────┬──────────────────────────────────┘
                               │  audio_path (str)
                               ▼
@@ -53,8 +53,8 @@ Ba tầng giao tiếp qua **2 interface** rất nhỏ:
 
 ```
 vietnamese-speech-emotion/
-├── app.py                       # Gradio UI (~270 LOC)
-├── requirements.txt             # CPU baseline — torch chưa có CUDA
+├── streamlit_app.py             # Streamlit UI (~190 LOC)
+├── requirements.txt             # CPU baseline — torch chưa có CUDA, gồm streamlit
 ├── setup_rtx4050.sh             # cài torch CUDA 12.1 cho dev GPU
 ├── README.md                    # entry chính cho user / HF Space
 │
@@ -92,83 +92,80 @@ vietnamese-speech-emotion/
 
 ---
 
-## 3. Tầng Presentation — `app.py`
+## 3. Tầng Presentation — `streamlit_app.py`
 
-### 3.1. Cấu trúc Gradio Blocks
+### 3.1. Cấu trúc script
 
-`app.py` xây dựng UI theo `gr.Blocks(...)` (không `Interface`) để có toàn
-quyền kiểm soát layout. Cấu trúc:
+Streamlit không có khái niệm "Blocks" — mỗi lần user tương tác,
+`main()` chạy lại từ đầu (rerun model). `@st.cache_resource` giữ model
+đã load qua các lần rerun. Cấu trúc:
 
 ```
-gr.Blocks(theme=gr.themes.Soft(), css=APP_CSS)
-├── gr.Markdown(HEADER_MD)              # tiêu đề + subtitle
-├── gr.HTML(STATUS_HTML)                # status banner (model info)
-├── gr.Tabs()
-│   ├── Tab "📁 Upload"   → gr.Audio(type="filepath")
-│   ├── Tab "🎙️ Mic"     → gr.Audio(type="filepath", sources="microphone")
-│   └── Tab "🎵 Samples" → gr.Examples(samples=…)
-├── gr.Button("Analyze", variant="primary")
-├── gr.Row()
-│   ├── gr.Column()  # emotion label, confidence, raw chip, latency
-│   └── gr.Column()  # BarPlot class_scores
-└── gr.Markdown(FOOTER_MD)
+st.set_page_config(title, icon, layout="centered")
+main()
+├── st.title / st.caption                # tiêu đề + subtitle
+├── _warm_model()  [@st.cache_resource]  # lazy-load model, cache qua rerun
+├── render_bench_banner()                # st.caption từ bench/results/scores.json
+├── st.tabs(["📁 Upload", "🎙️ Microphone", "🎵 Samples"])
+│   ├── tab_upload   → st.file_uploader + st.audio + nút Analyze
+│   ├── tab_mic      → st.audio_input (mic native) + nút Analyze
+│   └── tab_samples  → st.selectbox × 2 + st.audio + nút Analyze
+└── render_result(result)                # hero card (HTML) + probability bars
 ```
 
-### 3.2. Design tokens (CSS variables)
+### 3.2. Styling: inline HTML, không CSS file riêng
 
-`APP_CSS` (top của `app.py`) khai báo 6 biến màu + spacing + radius:
+Không có `APP_CSS` tách riêng như Gradio — `streamlit_app.py` build
+từng khối kết quả bằng f-string HTML nhỏ, render qua
+`st.markdown(..., unsafe_allow_html=True)`:
 
-```css
-:root {
-  --blue:  #1d4ed8;   /* primary action */
-  --green: #15803d;   /* success */
-  --amber: #b45309;   /* warning / neutral */
-  --red:   #b91c1c;   /* error / angry */
-  --ink:   #162033;   /* main text */
-  --muted: #64748b;   /* secondary text */
-  --surface: #ffffff; /* card bg */
-  --radius: 14px;
-  --gap: 24px;
+```python
+EMOTION_COLORS = {
+    "angry":   "#dc2626",  # red 600
+    "happy":   "#d97706",  # amber 600
+    "neutral": "#475569",  # slate 600
+    "sad":     "#2563eb",  # blue 600
 }
+DEFAULT_COLOR = "#94a3b8"
 ```
 
-Các class sử dụng token:
-- `.result-shell` — card bo góc, đổ bóng nhẹ, padding `--gap`
-- `.emotion-label` — font clamp 36-72px, weight 700, màu theo emotion
-- `.confidence-gauge` — vòng tròn `conic-gradient()` theo % confidence
-- `.metric-chip` — chip nhỏ hiển thị "Raw label: surprised" hoặc "Latency: 72 ms"
+- `render_result()` — hero `<div>` (màu nền `{color}14` = ~8% alpha)
+  chứa emotion label to, confidence, raw label, latency, device
+- `_render_bar()` — 1 hàng bar ngang (label + track + %), lặp lại cho
+  mỗi class trong `class_scores`, sắp xếp giảm dần theo score
 
 ### 3.3. Quy trình xử lý request
 
 ```python
-def on_analyze_click(audio_path, history):
-    info = inference.warmup()                    # lazy-load model lần đầu
-    result = inference.predict(audio_path)       # RawPrediction dict
-    top_label = result["label"]
-    scores = result["class_scores"]              # {neutral: .4, …}
-    confidence = scores[top_label]
-    color = EMOTION_COLORS[top_label]            # hex code
-    return (
-        build_emotion_label_html(top_label, color),  # <div> HTML
-        build_confidence_gauge_html(confidence, color),
-        build_metric_chips_html(raw=…, latency_ms=…, …),
-        build_barplot_df(scores),                     # pd.DataFrame
-        append_to_history(history, top_label),
-    )
+@st.cache_resource(show_spinner="Đang tải model MERaLiON-SER-v1 (~10-30s lần đầu)...")
+def _warm_model() -> dict:
+    return inference.warmup()
+
+def main():
+    info = _warm_model()             # cached — chỉ load thật lần đầu
+    render_bench_banner()
+    with tab_upload:
+        uploaded = st.file_uploader(...)
+        if uploaded and st.button("Analyze", key="analyze_upload"):
+            result = _predict_bytes(uploaded.getvalue(), suffix)
+            render_result(result)
 ```
 
-Quan trọng: **`history` (lịch sử dự đoán) chỉ lưu trong Gradio client**,
-không gửi lên server. Server stateless — mỗi request chỉ chứa audio + IDs.
+Quan trọng: **mỗi tab dùng `key=` riêng** cho `st.button` — Streamlit
+yêu cầu key duy nhất cho mọi widget khi cùng loại widget xuất hiện
+nhiều lần trên trang (3 nút "Analyze", 1 cho mỗi tab). Không có
+`history` phía client như Gradio — mỗi rerun chỉ giữ state trong
+`st.session_state` nếu cần, hiện tại app không dùng history.
 
 ### 3.4. Single-model — không có selector
 
-Sau phase đơn giản hóa, `app.py` đã bỏ:
-- `_leaderboard_html()` — bảng so sánh nhiều model
-- `_recommendation_html()` — banner "bạn nên dùng model X"
-- Model dropdown — không có nhiều model để chọn
-- `_switch_model()` — chỉ có 1 model cố định
+Cũng như bản Gradio trước đây, `streamlit_app.py` không có:
+- Bảng so sánh nhiều model (leaderboard)
+- Banner khuyến nghị "dùng model X"
+- Dropdown chọn model — chỉ 1 model cố định (`src.inference` singleton)
 
-Kết quả: `app.py` ~270 dòng (giảm ~250 so với multi-model).
+Kết quả: `streamlit_app.py` ~190 dòng, tách biệt hoàn toàn khỏi
+`src/` (không import gì ngoài `from src import inference`).
 
 ---
 
@@ -225,10 +222,12 @@ sàng" thay vì crash.
 ### 4.4. Source of truth cho status
 
 Khi user mở app:
-1. `app.py::warmup()` gọi `inference.warmup()` (background).
-2. UI hiển thị spinner nếu chưa có status, banner xanh khi có.
-3. Click "Analyze" sẽ trigger `inference.predict()`, lúc đó mới load thật
-   (trừ khi warmup đã load rồi).
+1. `streamlit_app.py::_warm_model()` gọi `inference.warmup()` ngay khi
+   script chạy lần đầu — `@st.cache_resource` hiển thị spinner tự động
+   trong lúc load, và cache kết quả cho mọi rerun sau.
+2. `render_bench_banner()` hiển thị caption benchmark ViSEC.
+3. Click "Analyze" sẽ trigger `inference.predict()` trên audio đã chọn
+   (model đã sẵn sàng từ bước 1, không load lại).
 
 ---
 
@@ -385,7 +384,7 @@ thuộc data private. Nhưng accuracy chưa đạt SOTA 65%+ của các model
 ### 7.1. Sơ đồ tuần tự
 
 ```
-User             Gradio UI              inference.py            MeralionAdapter       HuggingFace Model
+User            Streamlit UI             inference.py            MeralionAdapter       HuggingFace Model
  │                    │                       │                        │                       │
  │ upload audio.wav   │                       │                        │                       │
  ├───────────────────►│                       │                        │                       │
@@ -602,12 +601,12 @@ Nhờ Adapter pattern, stub thay thế được model thật không cần downlo
 Project không có CI chính thức nhưng conventions:
 
 - **PR merge**: chạy `pytest -m "not slow"` phải pass 20/20 tests.
-- **Documentation**: nếu thay đổi `app.py`, phải update screenshot trong
-  `docs/PRESENTATION.md` (slide 15).
+- **Documentation**: nếu thay đổi `streamlit_app.py`, phải update
+  screenshot trong `docs/PRESENTATION.md` (slide 15).
 - **Numbers**: nếu thay đổi benchmark, update cả 3 file
   `README.md`, `docs/BENCHMARK.md`, `docs/PRESENTATION.md`.
 - **No new deps**: PR thêm dependency phải được approve. Hiện tại chỉ
-  torch / transformers / gradio / librosa / soundfile.
+  torch / transformers / streamlit / librosa / soundfile.
 
 ---
 
@@ -647,8 +646,8 @@ cho state không bị duplicate.
 ## 12. Triết lý thiết kế
 
 1. **Đơn giản trước, tối ưu sau** — single-model trước, multi-model sau
-   (nếu cần). Multi-model Space trước đó có 525 LOC app.py, giờ chỉ
-   270.
+   (nếu cần). Multi-model Space trước đó có 525 LOC app.py (Gradio);
+   `streamlit_app.py` hiện tại chỉ ~190 dòng.
 2. **Adapter thay vì hard-code** — interface `BaseAdapter` cho phép
    plug-and-play model. Stub test dễ viết.
 3. **Source-of-truth single file** — `bench/results/scores.json` là

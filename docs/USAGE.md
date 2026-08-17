@@ -24,8 +24,9 @@ https://huggingface.co/spaces/<username>/vietnamese-speech-emotion
 ### Bước 2. Đợi model load (~30 giây)
 
 Lần đầu truy cập, Space tải model `MERaLiON-SER-v1` (~1.2 GB) từ HF Hub.
-Bạn sẽ thấy spinner hoặc banner "Loading model...". Sau khi load xong,
-status banner chuyển sang xanh lá.
+Bạn sẽ thấy spinner "Đang tải model MERaLiON-SER-v1...". Sau khi load
+xong, spinner biến mất và caption hiển thị `model_id`, `device`, số
+class.
 
 ### Bước 3. Upload audio
 
@@ -48,11 +49,12 @@ Có 3 cách:
 
 ### Bước 4. Bấm "Analyze"
 
-Nút xanh lớn ở giữa. Đợi 1–3 giây.
+Nút primary màu xanh dưới mỗi tab. Đợi 1–3 giây (có spinner "Đang
+phân tích...").
 
 ### Bước 5. Đọc kết quả
 
-Kết quả hiện ở panel bên phải:
+Kết quả hiện ngay dưới nút Analyze, trong cùng tab:
 
 ```
 ┌────────────────────────────────────────────────────────────┐
@@ -120,18 +122,19 @@ pip install --upgrade pip
 pip install -r requirements.txt
 
 # 4. Chạy app
-python app.py
+streamlit run streamlit_app.py
 ```
 
 Output kỳ vọng:
 
 ```
-Running on local URL:  http://127.0.0.1:7860
+  You can now view your Streamlit app in your browser.
 
-To create a public link, set `share=True` in `launch()`.
+  Local URL: http://localhost:8501
+  Network URL: http://192.168.x.x:8501
 ```
 
-Mở http://127.0.0.1:7860 trong trình duyệt. Từ bước 3 trở đi giống
+Mở http://localhost:8501 trong trình duyệt. Từ bước 3 trở đi giống
 phần 1 (Upload / Mic / Sample → Analyze → đọc kết quả).
 
 ### 2.3. Kích hoạt GPU (nếu có card NVIDIA)
@@ -159,8 +162,8 @@ CUDA: True
 Device: NVIDIA GeForce RTX 4050 Laptop GPU
 ```
 
-Sau đó restart app, status banner sẽ hiển thị `device: cuda` thay vì
-`device: cpu`.
+Sau đó restart app (`streamlit run streamlit_app.py`), caption dưới
+tiêu đề sẽ hiển thị `device: cuda` thay vì `device: cpu`.
 
 ### 2.4. Yêu cầu hệ thống tối thiểu
 
@@ -183,9 +186,9 @@ Sau đó restart app, status banner sẽ hiển thị `device: cuda` thay vì
 - Cài Microsoft C++ Build Tools
 - Hoặc skip librosa → chỉ dùng soundfile (đơn giản hơn)
 
-**Lỗi `OSError: cannot connect to localhost:7860`**:
-- Cổng 7860 đã bị app khác chiếm
-- Sửa `app.py`: đổi `server_port=7860` → `server_port=7861`
+**Lỗi `OSError: cannot connect to localhost:8501`**:
+- Cổng 8501 đã bị app khác chiếm
+- Chạy với cổng khác: `streamlit run streamlit_app.py --server.port 8502`
 
 **Lỗi model load quá chậm (~5 phút)**:
 - Internet chậm, model 1.2 GB
@@ -340,7 +343,7 @@ Library `librosa` + `soundfile` trong `src/audio.py` hỗ trợ:
 - Sample rate: bất kỳ (sẽ được resample về 16 kHz mono)
 - Channels: stereo sẽ được downmix thành mono
 - Duration: 1–60 giây (quá ngắn hoặc quá dài có thể kết quả kém)
-- File size: ≤ 50 MB (giới hạn Gradio)
+- File size: ≤ 200 MB (giới hạn mặc định `st.file_uploader` của Streamlit)
 
 **Tip audio quality**:
 - Dùng microphone ngoài sẽ tốt hơn mic laptop.
@@ -443,9 +446,11 @@ Có, nhưng cần effort:
 
 ### Q7. Có API endpoint không? Có webhook không?
 
-Hiện tại chỉ có UI Gradio. Gradio tự động tạo REST API ở
-`/predict` endpoint cho developer tích hợp. Webhook chưa có — nếu cần,
-sửa `inference.predict()` thêm side-effect (HTTP POST đến URL).
+Hiện tại chỉ có UI Streamlit — không có REST API tự động (khác với
+Gradio). Muốn gọi model từ script/service khác, import trực tiếp
+`src.inference.predict()` (xem mục 3 ở trên) hoặc tự viết một wrapper
+FastAPI mỏng gọi cùng hàm đó. Webhook chưa có — nếu cần, sửa
+`inference.predict()` thêm side-effect (HTTP POST đến URL).
 
 ### Q8. Làm sao đóng góp?
 

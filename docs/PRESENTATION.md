@@ -29,7 +29,7 @@
 | 12 | Kiến trúc hệ thống | Triển khai | 1:30 |
 | 13 | Adapter pattern | Triển khai | 1:00 |
 | 14 | Pipeline inference | Triển khai | 1:00 |
-| 15 | UI Gradio | Triển khai | 1:00 |
+| 15 | UI Streamlit | Triển khai | 1:00 |
 | 16 | CPU vs GPU: harness so với app thật | Triển khai | 1:00 |
 | 17 | Triển khai HF Space | Triển khai | 1:00 |
 | 18 | Cài đặt local | Sử dụng | 1:00 |
@@ -118,7 +118,7 @@ phân tích cuộc gọi call center, app sức khỏe tinh thần.
 **🎯 Mục tiêu**:
 1. Tìm hiểu bài toán Speech Emotion Recognition và các thách thức với tiếng Việt.
 2. Đánh giá (benchmark) các model công khai trên dataset chuẩn tiếng Việt.
-3. Xây dựng ứng dụng Gradio cho phép user upload audio và nhận diện cảm xúc.
+3. Xây dựng ứng dụng Streamlit cho phép user upload audio và nhận diện cảm xúc.
 4. Triển khai trên Hugging Face Spaces để demo công khai.
 
 **📦 Phạm vi**:
@@ -138,7 +138,7 @@ phân tích cuộc gọi call center, app sức khỏe tinh thần.
 > "Đồ án có 4 mục tiêu chính. Đầu tiên là tìm hiểu lý thuyết SER và các thách
 > thức riêng với tiếng Việt — đây là ngôn ngữ có thanh điệu, ngữ điệu phong
 > phú, ít dữ liệu có nhãn. Thứ hai là benchmark nhiều model trên cùng một
-> dataset để so sánh công bằng. Thứ ba là xây dựng UI Gradio thân thiện.
+> dataset để so sánh công bằng. Thứ ba là xây dựng UI Streamlit thân thiện.
 > Và thứ tư là deploy lên Hugging Face Spaces.
 >
 > Phạm vi em giới hạn ở 4 cảm xúc cơ bản, không làm fine-tune hay multi-modal.
@@ -495,7 +495,7 @@ trong buổi thuyết trình.
 ┌──────────────────────────────────────────────────────────┐
 │  PRESENTATION LAYER                                      │
 │  ┌────────────────────────────────────────────────┐    │
-│  │  app.py — Gradio UI                           │    │
+│  │  streamlit_app.py — Streamlit UI               │    │
 │  │  (Upload / Microphone / Samples tabs)         │    │
 │  └────────────────────┬───────────────────────────┘    │
 └───────────────────────┼──────────────────────────────────┘
@@ -528,7 +528,7 @@ trong buổi thuyết trình.
 **Các file chính** (table, `wc -l` thật tại thời điểm trình bày):
 | File | LOC | Vai trò |
 |---|---|---|
-| `app.py` | 772 | UI Gradio |
+| `streamlit_app.py` | 192 | UI Streamlit |
 | `bench/run_meralion.py` | 544 | Benchmark script |
 | `src/adapters/meralion.py` | 329 | MERaLiON concrete adapter |
 | `src/inference.py` | 174 | Wrapper, singleton |
@@ -539,7 +539,7 @@ trong buổi thuyết trình.
 
 **Script** (~1:30):
 > "Kiến trúc hệ thống chia 3 tầng. Tầng trên cùng là Presentation —
-> Gradio UI expose 3 cách nhập audio: upload file, microphone, và samples.
+> Streamlit UI expose 3 cách nhập audio: upload file, microphone, và samples.
 >
 > Tầng giữa là Inference — singleton wrapper đảm bảo chỉ một model trong
 > memory tại một thời điểm. Adapter pattern cho phép dễ dàng thêm model mới
@@ -547,9 +547,9 @@ trong buổi thuyết trình.
 >
 > Tầng dưới là Model layer — HuggingFace Transformers load MERaLiON-SER-v1.
 >
-> Tổng codebase (`app.py` + `src/` + `bench/`) khoảng 2,600 dòng Python,
-> đủ nhỏ để review trong một buổi nhưng đủ chức năng cho một sản phẩm
-> thực tế."
+> Tổng codebase (`streamlit_app.py` + `src/` + `bench/`) khoảng 2,000 dòng
+> Python, đủ nhỏ để review trong một buổi nhưng đủ chức năng cho một sản
+> phẩm thực tế."
 
 ---
 
@@ -623,7 +623,7 @@ def predict(self, waveform: np.ndarray, sample_rate: int) -> RawPrediction:
 **Lưu ý thật** (đáng nói khi trình bày): `load()` hiện tại **không**
 có logic tự chuyển model sang GPU (`self._device = "cpu"` cố định,
 không có `.to("cuda")` nào trong `src/`) — chỉ `bench/run_meralion.py`
-tự quản lý device/dtype riêng cho việc benchmark. Ứng dụng Gradio
+tự quản lý device/dtype riêng cho việc benchmark. Ứng dụng Streamlit
 đang chạy CPU-only end-to-end; đây là một hạn chế thật, không phải
 tiểu tiết — xem thêm Slide 16.
 
@@ -650,7 +650,7 @@ tiểu tiết — xem thêm Slide 16.
 User ──┐
        │ 1. Upload audio.wav
        ▼
-   Gradio UI  ──────────┐
+ Streamlit UI ──────────┐
                          │ 2. audio_path
                          ▼
               ┌──────────────────────┐
@@ -683,9 +683,9 @@ User ──┐
               └──────────┬───────────┘
                          │ 7. dict
                          ▼
-                   Gradio UI
+                 Streamlit UI
                    - top emotion (HTML)
-                   - bar plot
+                   - probability bars
                    - confidence text
 ```
 
@@ -698,11 +698,11 @@ User ──┐
 | Softmax + post-process | ~4 ms |
 | **Total** | **~69 ms/clip** |
 
-**Hình ảnh**: Sơ đồ sequence trên, hoặc screenshot Gradio app khi đang analyze.
+**Hình ảnh**: Sơ đồ sequence trên, hoặc screenshot Streamlit app khi đang analyze.
 
 **Script** (~1:00):
-> "Pipeline inference gồm 6 bước. Bước 1 user upload file, bước 2 Gradio
-> gọi predict() với đường dẫn file. Bước 3 wrapper lazy-load adapter nếu
+> "Pipeline inference gồm 6 bước. Bước 1 user upload file, bước 2 Streamlit
+> gọi predict() với đường dẫn file tạm. Bước 3 wrapper lazy-load adapter nếu
 > chưa load. Bước 4 load audio về 16kHz mono.
 >
 > Bước 5 là model inference: feature extractor biến waveform thành tensor,
@@ -710,46 +710,36 @@ User ──┐
 > Bước 6 format output thành dict UI-friendly.
 >
 > Con số 69ms là từ `bench/run_meralion.py` chạy trên RTX 4050 — script
-> benchmark này tự quản lý device/dtype riêng. App Gradio hiện tại
-> (`app.py` + `src/adapters/meralion.py`) chưa có logic tự chuyển sang
-> GPU, nên khi chạy `python app.py` trên máy có GPU, inference vẫn đi
-> qua đường CPU. Đây là gap thật giữa benchmark harness và app — em nói
-> rõ ở Slide 16."
+> benchmark này tự quản lý device/dtype riêng. App Streamlit hiện tại
+> (`streamlit_app.py` + `src/adapters/meralion.py`) chưa có logic tự chuyển
+> sang GPU, nên khi chạy `streamlit run streamlit_app.py` trên máy có GPU,
+> inference vẫn đi qua đường CPU. Đây là gap thật giữa benchmark harness và
+> app — em nói rõ ở Slide 16."
 
 ---
 
-## Slide 15 — UI Gradio
+## Slide 15 — UI Streamlit
 
-**Tiêu đề**: Giao diện Gradio — Thiết kế tối giản
+**Tiêu đề**: Giao diện Streamlit — Thiết kế tối giản
 
 **Screenshot app** (chiếm phần lớn slide):
-- Header với tiêu đề + subtitle
-- 3 tab: Upload / Microphone / Samples
-- Nút Analyze lớn, primary blue
-- Result card: emotion label lớn (responsive `clamp(28px, 3.6vw, 44px)`),
-  confidence, raw label
-- Bar plot class distribution
+- Title + caption + bench banner (accuracy ViSEC)
+- 3 tab: 📁 Upload / 🎙️ Microphone / 🎵 Samples
+- Nút Analyze primary (mỗi tab có nút riêng)
+- Result card: emotion label lớn, confidence, raw label, latency, device
+- Probability bars cho 7 class, sắp xếp giảm dần theo score
 
 **Design decisions**:
 - **Single-model focus**: bỏ dropdown chọn model, bỏ leaderboard so sánh
   → UI gọn hơn, focus vào kết quả.
-- **Responsive 2-column**: result details bên trái, bar plot bên phải.
+- **1 cột, kết quả render ngay dưới input**: đúng convention Streamlit
+  (top-to-bottom rerun), không cần layout 2 cột như Gradio.
 - **Color theo emotion**: mỗi emotion có màu riêng (happy=cam, sad=xanh,
   angry=đỏ, neutral=xám) → nhận biết nhanh.
-- **Confidence gauge**: vòng tròn thể hiện % confidence, màu theo emotion.
+- **`@st.cache_resource`**: cache model đã load qua các lần rerun, tránh
+  load lại mỗi khi user tương tác.
 
-**CSS variables** (thật, từ `app.py::APP_CSS`):
-```css
---surface:  #ffffff;   /* nền card */
---ink:      #0f172a;   /* text chính */
---muted:    #64748b;   /* text phụ */
---line:     #e2e8f0;   /* viền */
---primary:  #1d4ed8;   /* nút, accent */
---radius:   12px;
---gap:      20px;
-```
-
-**Màu theo emotion** (thật, từ `app.py::EMOTION_COLORS`):
+**Màu theo emotion** (thật, từ `streamlit_app.py::EMOTION_COLORS`):
 ```python
 EMOTION_COLORS = {
     "angry":   "#dc2626",  # red 600
@@ -757,21 +747,35 @@ EMOTION_COLORS = {
     "neutral": "#475569",  # slate 600
     "sad":     "#2563eb",  # blue 600
 }
+DEFAULT_COLOR = "#94a3b8"
+```
+
+**Hero card** (thật, từ `streamlit_app.py::render_result()` — inline
+HTML qua `st.markdown(..., unsafe_allow_html=True)`, không có file CSS
+riêng như bản Gradio trước đây):
+```python
+st.markdown(
+    f"<div style='padding:18px 20px;border-radius:12px;"
+    f"background:{color}14;border:1px solid {color}40;'>"
+    f"<div style='font-size:38px;font-weight:750;color:{color};'>{label}</div>"
+    f"...</div>",
+    unsafe_allow_html=True,
+)
 ```
 
 **Hình ảnh**: Screenshot trực tiếp từ app khi đang chạy.
 
 **Script** (~1:00):
-> "UI Gradio được thiết kế tối giản, single-model. 3 tab cho 3 cách nhập
-> audio. Nút Analyze to, primary blue.
+> "UI Streamlit được thiết kế tối giản, single-model. 3 tab cho 3 cách nhập
+> audio. Mỗi tab có nút Analyze riêng.
 >
-> Kết quả hiển thị dạng card: tên emotion to, cỡ chữ responsive từ 28
-> đến 44px tùy màn hình, màu theo emotion; confidence dạng gauge vòng
-> tròn; raw label trong chip; latency. Bên dưới là bar plot 7-class
-> probability distribution.
+> Kết quả hiển thị dạng card ngay dưới nút, không cần chuyển trang: tên
+> emotion to, màu theo emotion; confidence; raw label; latency; device.
+> Bên dưới là các thanh xác suất cho 7 class, sắp xếp từ cao xuống thấp.
 >
-> CSS dùng design tokens chuẩn — biến màu, spacing, radius — để dễ
-> maintain và theme sau này."
+> Khác với Gradio — không có file CSS riêng, mọi styling là inline HTML
+> nhỏ gọn, và model được cache qua `@st.cache_resource` để không load
+> lại mỗi lần user tương tác với UI."
 
 ---
 
@@ -799,8 +803,9 @@ minh họa, không phải một benchmark CPU-vs-GPU chính thức.
 **không có code chuyển model sang GPU** — `self._device = "cpu"` cố
 định, không có `.to("cuda")` nào trong `src/`. Chỉ
 `bench/run_meralion.py` tự làm việc này cho mục đích benchmark. Nghĩa
-là **`python app.py` luôn chạy CPU, kể cả trên máy có GPU** — README
-hiện ghi "adapter tự động detect CUDA" nhưng code chưa làm điều đó.
+là **`streamlit run streamlit_app.py` luôn chạy CPU, kể cả trên máy có
+GPU** — README hiện ghi "adapter tự động detect CUDA" nhưng code chưa
+làm điều đó.
 
 **Setup để tự chạy benchmark GPU** (không có script tự động hóa —
 đây là 2 lệnh thủ công thật, không phải phần của app):
@@ -816,9 +821,9 @@ dev (xem Slide 11).
 
 **Script** (~1:00):
 > "Con số 69ms/clip là thật, nhưng chỉ đúng trong `bench/run_meralion.py`
-> — script benchmark tự quản lý device riêng. Ứng dụng Gradio mà user
-> thực sự chạy chưa có logic đó, nên `python app.py` luôn chạy CPU dù
-> máy có GPU hay không.
+> — script benchmark tự quản lý device riêng. Ứng dụng Streamlit mà user
+> thực sự chạy chưa có logic đó, nên `streamlit run streamlit_app.py`
+> luôn chạy CPU dù máy có GPU hay không.
 >
 > Để có cảm giác thực tế, em đo trực tiếp trên máy dev: sau khi model
 > load xong (6.1 giây), mỗi clip mất khoảng 975-980ms trên CPU — chậm
@@ -838,12 +843,12 @@ dev (xem Slide 11).
 **Quy trình 4 bước**:
 ```
 1. Tạo Space trống trên huggingface.co/new-space
-   - SDK: Gradio
+   - SDK: Streamlit
    - Hardware: CPU basic (16 GB RAM, free)
    - License: MIT
    - Visibility: Public
 
-2. git init && git add . && git commit -m "Gradio Space - MERaLiON Việt"
+2. git init && git add . && git commit -m "Streamlit Space - MERaLiON Việt"
 
 3. git remote add space https://huggingface.co/spaces/<user>/<name>
 
@@ -863,9 +868,10 @@ title: Vietnamese Speech Emotion Recognition
 emoji: 🇻🇳
 colorFrom: blue
 colorTo: green
-sdk: gradio
-sdk_version: 5.0.0
-app_port: 7860
+sdk: streamlit
+sdk_version: 1.35.0
+app_file: streamlit_app.py
+app_port: 8501
 pinned: false
 license: mit
 suggested_hardware: cpu-basic
@@ -879,7 +885,7 @@ models:
 
 **Script** (~1:00):
 > "Triển khai lên HuggingFace Spaces chỉ mất 5 phút. Đầu tiên tạo Space trống
-> trên web, chọn SDK Gradio và hardware CPU basic (free tier).
+> trên web, chọn SDK Streamlit và hardware CPU basic (free tier).
 >
 > Sau đó làm theo 3 lệnh git: init, commit, push. Build mất 3 phút, runtime
 > load model mất 30 giây. Sau 5 phút Space đã public.
@@ -906,8 +912,8 @@ python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
 
 # 3. Chạy app
-.venv/bin/python3 app.py
-# → http://127.0.0.1:7860
+.venv/bin/streamlit run streamlit_app.py
+# → http://localhost:8501
 ```
 
 **Optional: GPU support** (RTX 4050 / CUDA host):
@@ -935,7 +941,8 @@ python3 -m venv .venv
 
 **Script** (~1:00):
 > "Cài đặt local cực kỳ đơn giản — 3 bước: clone repo, tạo venv và cài
-> requirements, chạy app.py. Tổng thời gian khoảng 5 phút.
+> requirements, chạy `streamlit run streamlit_app.py`. Tổng thời gian
+> khoảng 5 phút.
 >
 > Yêu cầu RAM tối thiểu 4 GB với swap, đề xuất 8 GB. Nếu có GPU NVIDIA
 > thì cài thêm torch CUDA wheel, latency sẽ nhanh hơn 40 lần.
@@ -998,7 +1005,7 @@ python3 -m venv .venv
 - (Hoặc: Video demo nếu không demo live được)
 
 **Checklist trước khi demo**:
-- [ ] App đang chạy tại http://127.0.0.1:7860
+- [ ] App đang chạy tại http://localhost:8501
 - [ ] Microphone đã test hoạt động
 - [ ] Có sẵn 3 file audio mẫu (happy/neutral/sad/angry)
 - [ ] Slide backup trong trường hợp demo fail

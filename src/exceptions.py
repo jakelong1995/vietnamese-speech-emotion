@@ -1,4 +1,4 @@
-"""Domain exceptions for the single-model Gradio Space."""
+"""Domain exceptions for the single-model Streamlit app."""
 from __future__ import annotations
 
 from typing import Any

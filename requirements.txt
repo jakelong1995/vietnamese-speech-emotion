@@ -22,7 +22,8 @@ soundfile>=0.12,<1.0
 PyYAML>=6.0,<7.0
 
 # UI
-gradio>=5.0,<6.0
+# streamlit>=1.35 is required for st.audio_input (native mic widget).
+streamlit>=1.35,<2.0
 
 # Tests (not installed on HF Space, but used locally)
 pytest>=8.0,<9.0

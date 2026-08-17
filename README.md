@@ -3,9 +3,10 @@ title: Vietnamese Speech Emotion Recognition
 emoji: 🇻🇳
 colorFrom: blue
 colorTo: green
-sdk: gradio
-sdk_version: 5.0.0
-app_port: 7860
+sdk: streamlit
+sdk_version: 1.35.0
+app_file: streamlit_app.py
+app_port: 8501
 pinned: false
 license: mit
 suggested_hardware: cpu-basic
@@ -16,7 +17,7 @@ models:
 
 # Vietnamese Speech Emotion Recognition
 
-A Gradio Space that classifies Vietnamese speech into 4 emotions
+A Streamlit app that classifies Vietnamese speech into 4 emotions
 (`happy / neutral / sad / angry`) using
 [`MERaLiON/MERaLiON-SER-v1`](https://huggingface.co/MERaLiON/MERaLiON-SER-v1)
 — a Whisper-Medium + LoRA + ECAPA-TDNN speech-emotion recogniser.
@@ -45,32 +46,19 @@ neutral · happy · sad · angry · fearful · disgusted · surprised
 
 The 4-class ViSEC benchmark uses only `happy / neutral / sad / angry`;
 the extra 3 raw buckets (`fearful / disgusted / surprised`) are
-reported in the UI's bar plot but are not scored by the ViSEC bench.
+reported in the UI's bar chart but are not scored by the ViSEC bench.
 
 ## Local development
 
 ```bash
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-python app.py
+streamlit run streamlit_app.py
 ```
 
-Opens `http://127.0.0.1:7860`. First inference triggers the MERaLiON
+Opens `http://localhost:8501`. First inference triggers the MERaLiON
 load (~30 s on CPU, ~9 s on GPU at FP16). On hosts with < 1.5 GiB
 free RAM, the adapter refuses to load — close other apps and retry.
-
-### Alternate UI: Streamlit
-
-`streamlit_app.py` is a second front-end on the `streamlit-ui` branch,
-sharing the same `src/inference.py` backend as the Gradio app — same
-model, same predictions, different presentation.
-
-```bash
-.venv/bin/pip install -r requirements-streamlit.txt
-.venv/bin/streamlit run streamlit_app.py
-```
-
-Opens `http://localhost:8501`.
 
 ### GPU runs
 
@@ -81,8 +69,8 @@ wheel separately (the Space build is CPU-only by design):
 .venv/bin/pip install --upgrade torch --index-url https://download.pytorch.org/whl/cu121
 ```
 
-Then re-run `python app.py` — the adapter auto-detects CUDA and loads
-at FP16 (~600 MB VRAM).
+Then re-run `streamlit run streamlit_app.py` — the adapter
+auto-detects CUDA and loads at FP16 (~600 MB VRAM).
 
 ## Run tests
 
@@ -101,9 +89,9 @@ Tests enforce:
 
 ```bash
 # 1. Create an empty Space at https://huggingface.co/new-space
-#    SDK = Gradio · Hardware = CPU basic · License = MIT
+#    SDK = Streamlit · Hardware = CPU basic · License = MIT
 # 2. Push this repo:
-git init && git add . && git commit -m "Gradio Space - MERaLiON Việt"
+git init && git add . && git commit -m "Streamlit Space - MERaLiON Việt"
 git remote add space https://huggingface.co/spaces/<your-username>/<space-name>
 git push space main
 ```
@@ -146,7 +134,7 @@ per-class F1 numbers.
 ## Stack
 
 - [MERaLiON/MERaLiON-SER-v1](https://huggingface.co/MERaLiON/MERaLiON-SER-v1) — model
-- [Gradio 5](https://gradio.app/) — UI
+- [Streamlit](https://streamlit.io/) — UI
 - [Hugging Face Spaces](https://huggingface.co/spaces) — hosting
 - [Hugging Face Transformers](https://huggingface.co/docs/transformers) — model loader
 - No React, no FastAPI, no provider registry — single-model, single-file.

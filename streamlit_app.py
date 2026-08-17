@@ -1,9 +1,7 @@
 """Streamlit front-end for Vietnamese Speech Emotion Recognition.
 
-Alternate UI to ``app.py`` (Gradio). Both share the exact same backend
-(``src/inference.py`` → the singleton MERaLiON-SER-v1 adapter), so a
-prediction made here is identical to one made in the Gradio app —
-only the presentation layer differs.
+Talks to the same backend as everything else in this repo
+(``src/inference.py`` → the singleton MERaLiON-SER-v1 adapter).
 
 Run:
 
@@ -23,7 +21,6 @@ SAMPLE_AUDIO_DIR = Path(__file__).parent / "sample_audio"
 SUPPORTED_AUDIO_TYPES = ["wav", "mp3", "ogg", "m4a", "flac", "webm"]
 VISEC_CLASSES = ("happy", "neutral", "sad", "angry")
 
-# Mirrors app.py::EMOTION_COLORS so both UIs read the same at a glance.
 EMOTION_COLORS = {
     "angry": "#dc2626",
     "happy": "#d97706",
@@ -132,9 +129,7 @@ def render_bench_banner() -> None:
 
 def main() -> None:
     st.title("🇻🇳 Vietnamese Speech Emotion Recognition")
-    st.caption(
-        "Streamlit UI — cùng backend `src/inference.py` với bản Gradio (`app.py`)."
-    )
+    st.caption("Streamlit UI — backend `src/inference.py`.")
 
     try:
         info = _warm_model()

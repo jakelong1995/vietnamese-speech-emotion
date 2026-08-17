@@ -1,4 +1,4 @@
-"""Vietnamese speech emotion recognition — single-model Gradio Space.
+"""Vietnamese speech emotion recognition — single-model Streamlit app.
 
 Built on :class:`src.adapters.meralion.MeralionAdapter`
 (`MERaLiON/MERaLiON-SER-v1`). The public surface is intentionally
@@ -7,7 +7,7 @@ small — only the shared types and exception classes are re-exported.
 Public surface:
 - :class:`src.adapters.base.ModelInfo` / :class:`RawPrediction` — shared types
 - :class:`src.exceptions.AppError` (and subclasses) — error surface
-- :func:`src.inference.predict` — Gradio-facing entry point
+- :func:`src.inference.predict` — Streamlit-facing entry point
 """
 
 from .adapters.base import ModelInfo, RawPrediction
