@@ -37,6 +37,17 @@ subset (100 per class). Numbers come from
 - Runs MERaLiON-SER-v1 and surfaces the **real softmax
   distribution** from the model (not a uniform-fabricated one)
 - Returns the top emotion + the full 7-bucket probability vector
+- **Emotion over time** — sliding-window inference (3 s window, 1.5 s
+  hop) plotted as a dominant-label strip over a probability area chart,
+  so you can see *when* the tone changed rather than one verdict for the
+  whole clip
+- **Transcript** (opt-in) — [PhoWhisper](https://huggingface.co/vinai/PhoWhisper-large)
+  transcribes the Vietnamese, and each spoken phrase is colour-coded by
+  the emotion detected while it was said
+
+Both extras are opt-in from the sidebar: each costs either a model
+download or a multiple of the single-shot latency, and that trade
+should be visible rather than hidden.
 
 ## 7 raw emotion classes (MERaLiON)
 
@@ -57,20 +68,52 @@ streamlit run streamlit_app.py
 ```
 
 Opens `http://localhost:8501`. First inference triggers the MERaLiON
-load (~30 s on CPU, ~9 s on GPU at FP16). On hosts with < 1.5 GiB
+load (~6 s on Apple Silicon, ~30 s on CPU). On hosts with < 1.5 GiB
 free RAM, the adapter refuses to load — close other apps and retry.
 
-### GPU runs
+### Hardware acceleration
 
-On a CUDA-capable host (RTX 4050 etc.), install a CUDA-matched torch
-wheel separately (the Space build is CPU-only by design):
+`src/device.py` picks the accelerator once for every model in the app
+(emotion + ASR): **`mps` → `cuda` → `cpu`**. No flags needed. Override
+with the `SER_DEVICE` env var (`auto` / `cpu` / `mps` / `cuda`).
+
+| Device | Precision | Latency, 3 s window |
+|---|---|---|
+| Apple Silicon (`mps`) | float32 | **430 ms** |
+| CPU | float32 | 980 ms |
+| NVIDIA (`cuda`) | float16 | not measured here |
+
+Measured on an M5 / 24 GB. The first inference after load is slower
+(~3 s) while Metal compiles its kernels; steady-state is the number
+above.
+
+**Apple Silicon stays at float32 on purpose.** Metal still falls back to
+the CPU for several fp16 operations, which makes half precision *slower*
+there and occasionally numerically wrong — and with unified memory there
+is no memory pressure to relieve. CUDA does use fp16, where tensor cores
+make it a straight win.
+
+On a CUDA host, install a CUDA-matched torch wheel separately (the Space
+build is CPU-only by design):
 
 ```bash
 .venv/bin/pip install --upgrade torch --index-url https://download.pytorch.org/whl/cu121
 ```
 
-Then re-run `streamlit run streamlit_app.py` — the adapter
-auto-detects CUDA and loads at FP16 (~600 MB VRAM).
+### Transcript (optional)
+
+Enable "Bóc băng" in the sidebar. Defaults to `vinai/PhoWhisper-small`
+(~1 GB, downloaded on first use); pick another size in the sidebar or
+set `ASR_MODEL_NAME`. That variable also accepts a **local directory**,
+which is the reliable route when HuggingFace's Xet CDN drops
+mid-transfer:
+
+```bash
+curl -L --http1.1 -C - -o pytorch_model.bin \
+  https://huggingface.co/vinai/PhoWhisper-small/resolve/main/pytorch_model.bin
+# ...plus config.json, tokenizer.json, preprocessor_config.json, etc.
+ASR_MODEL_NAME=/path/to/PhoWhisper-small streamlit run streamlit_app.py
+```
 
 ## Run tests
 
@@ -84,6 +127,11 @@ Tests enforce:
   no NaN, no negative values)
 - The inference layer is a singleton (one adapter in memory at a time)
 - `predict()` returns the full UI-shaped dict
+- Apple Silicon resolves to float32, never float16
+- Sliding windows overlap correctly and sub-second tails are dropped
+- Clip-level emotion averages probability vectors rather than voting on
+  per-window labels
+- ASR word timestamps regroup into phrases at real pauses
 
 ## Deploying to a new HF Space
 
@@ -109,8 +157,9 @@ Build time: ~3 min. The Space becomes publicly available at
 - **`happy` and `sad` are the weakest classes** (F1 ≈ 0.31–0.33). The
   model rarely predicts them as the top class; they tend to lose to
   `neutral` even when they're the ground-truth label.
-- **MERaLiON is heavy**: ~3 GB RAM on CPU, ~600 MB VRAM at FP16 on
-  GPU. Hosts with < 1.5 GiB free RAM cannot run this Space.
+- **MERaLiON is heavy**: ~3 GB RAM on CPU or Apple unified memory,
+  ~600 MB VRAM at FP16 on CUDA. Hosts with < 1.5 GiB free RAM cannot
+  run this Space.
 - **`vietnamese_verified` is `best_effort`** — the model's
   Vietnamese performance has been benchmarked (40.25 % on ViSEC)
   but not formally cross-validated against human labels.
@@ -133,7 +182,8 @@ per-class F1 numbers.
 
 ## Stack
 
-- [MERaLiON/MERaLiON-SER-v1](https://huggingface.co/MERaLiON/MERaLiON-SER-v1) — model
+- [MERaLiON/MERaLiON-SER-v1](https://huggingface.co/MERaLiON/MERaLiON-SER-v1) — emotion model
+- [vinai/PhoWhisper](https://huggingface.co/vinai/PhoWhisper-large) — Vietnamese ASR (optional)
 - [Streamlit](https://streamlit.io/) — UI
 - [Hugging Face Spaces](https://huggingface.co/spaces) — hosting
 - [Hugging Face Transformers](https://huggingface.co/docs/transformers) — model loader
