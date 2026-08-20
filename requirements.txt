@@ -12,7 +12,8 @@ huggingface-hub>=0.20,<1.0
 # modeling file needs transformers + peft (LoRA) + omegaconf directly,
 # and peft hard-imports accelerate internally even though nothing here
 # calls it directly.
-transformers>=4.40,<6.0
+# >=4.56 for the `dtype=` kwarg (the old `torch_dtype=` now warns).
+transformers>=4.56,<6.0
 peft>=0.10,<1.0
 omegaconf>=2.3,<3.0
 accelerate>=0.30,<2.0
@@ -21,9 +22,19 @@ accelerate>=0.30,<2.0
 soundfile>=0.12,<1.0
 PyYAML>=6.0,<7.0
 
+# Memory guard in src/adapters/meralion.py refuses to load the model on a
+# tight-RAM host. Without psutil that check silently no-ops and the
+# process gets OOM-killed instead of showing a readable error.
+psutil>=5.9,<8.0
+
 # UI
 # streamlit>=1.35 is required for st.audio_input (native mic widget).
 streamlit>=1.35,<2.0
+# Both ship as Streamlit dependencies, but streamlit_app.py imports them
+# directly (timeline charts), so pin them explicitly rather than relying
+# on a transitive dep that could be dropped upstream.
+pandas>=2.0,<3.0
+altair>=5.0,<7.0
 
 # Tests (not installed on HF Space, but used locally)
 pytest>=8.0,<9.0

@@ -26,3 +26,9 @@ class InvalidAudioError(AppError):
 
 class AudioTooShortError(AppError):
     code = "AUDIO_TOO_SHORT"
+
+
+class TranscriptionFailedError(AppError):
+    """Raised when the ASR model cannot load or cannot decode audio."""
+
+    code = "TRANSCRIPTION_FAILED"
