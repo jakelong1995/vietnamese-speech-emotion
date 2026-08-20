@@ -192,6 +192,11 @@ ASR_MODEL_NAME=~/.cache/vser-models/PhoWhisper-small \
     streamlit run streamlit_app.py
 ```
 
+App **tự ưu tiên model đã tải sẵn**: nếu có thư mục
+`~/.cache/vser-models/PhoWhisper-small/` (chứa `config.json`), chọn
+`small` trong sidebar sẽ dùng bản local đó thay vì tải lại từ Hub. Đổi
+chỗ tìm bằng biến `SER_MODEL_DIR`.
+
 Tải tay khi Xet lỗi (ép HTTP/1.1, có resume):
 
 ```bash

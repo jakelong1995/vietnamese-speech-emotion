@@ -39,6 +39,29 @@ log = logging.getLogger("vser.asr")
 MODEL_ENV = "ASR_MODEL_NAME"
 DEFAULT_MODEL = "vinai/PhoWhisper-small"
 
+#: Manually-downloaded models are looked up here before the Hub is
+#: consulted. HuggingFace's Xet CDN drops large transfers often enough
+#: that fetching PhoWhisper by hand with curl is a normal thing to do;
+#: without this, the sidebar would still point at a repo id whose cache
+#: entry is a half-written file. Override with ``SER_MODEL_DIR``.
+LOCAL_MODEL_DIR = Path(
+    os.environ.get("SER_MODEL_DIR",
+                   Path.home() / ".cache" / "vser-models")
+)
+
+#: Whisper is prone to getting stuck in a repetition loop, emitting the
+#: same fragment until it hits the token limit. PhoWhisper-small did this
+#: on an 8.5 s clip containing a foreign proper noun: 272 words and
+#: 34 seconds of compute for what should have been ~16 words. Blocking
+#: repeated 4-grams cuts that to 25 words in 3.9 s with no loss on
+#: well-behaved audio.
+GENERATE_KWARGS = {"no_repeat_ngram_size": 4}
+
+#: Vietnamese tops out around 6 syllables/second; Whisper counts roughly
+#: one "word" per syllable. Anything beyond this did not come from the
+#: audio, so we log it rather than pass it off as a transcript.
+MAX_WORDS_PER_SECOND = 10.0
+
 #: Group consecutive words into a phrase until the silence between them
 #: exceeds this, i.e. the speaker paused. 0.6 s is about the length of a
 #: clause boundary in conversational Vietnamese.
@@ -65,6 +88,29 @@ _pipe = None
 _model_id: str = os.environ.get(MODEL_ENV, DEFAULT_MODEL)
 _device: str = "cpu"
 _load_seconds: float = 0.0
+
+
+def resolve_model(name: str) -> str:
+    """Map a Hub repo id to a local copy when one is present.
+
+    A path that already points at a directory is returned untouched, so
+    an explicit ``ASR_MODEL_NAME=/some/dir`` always wins.
+    """
+    if Path(name).is_dir():
+        return name
+    local = LOCAL_MODEL_DIR / name.split("/")[-1]
+    if (local / "config.json").is_file():
+        log.info("using local ASR model at %s", local)
+        return str(local)
+    return name
+
+
+def available_local_models() -> list[str]:
+    """Names under :data:`LOCAL_MODEL_DIR` that look like usable models."""
+    if not LOCAL_MODEL_DIR.is_dir():
+        return []
+    return sorted(d.name for d in LOCAL_MODEL_DIR.iterdir()
+                  if (d / "config.json").is_file())
 
 
 def model_id() -> str:
@@ -100,7 +146,8 @@ def _load() -> None:
         return
 
     device = resolve_device()
-    log.info("loading ASR %s onto %s", _model_id, device)
+    target = resolve_model(_model_id)
+    log.info("loading ASR %s onto %s", target, device)
     t0 = time.perf_counter()
     try:
         import torch  # noqa: F401
@@ -108,7 +155,7 @@ def _load() -> None:
 
         _pipe = pipeline(
             "automatic-speech-recognition",
-            model=_model_id,
+            model=target,
             device=device,
             dtype=resolve_dtype(device),
             chunk_length_s=CHUNK_LENGTH_S,
@@ -193,6 +240,24 @@ def _group_words(words: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     return out
 
 
+def _span_seconds(words: List[Dict[str, Any]]) -> float:
+    if not words:
+        return 0.0
+    return max(w["end"] for w in words) - min(w["start"] for w in words)
+
+
+def looks_hallucinated(words: List[Dict[str, Any]]) -> bool:
+    """True when the word count is impossible for the audio's duration.
+
+    ``no_repeat_ngram_size`` suppresses the common repetition loop but
+    does not guarantee one cannot happen, so this stays as a net.
+    """
+    span = _span_seconds(words)
+    if span <= 0.0:
+        return False
+    return (len(words) / span) > MAX_WORDS_PER_SECOND
+
+
 def transcribe(audio_path: str | Path) -> Dict[str, Any]:
     """Transcribe a Vietnamese audio file.
 
@@ -206,7 +271,8 @@ def transcribe(audio_path: str | Path) -> Dict[str, Any]:
     t0 = time.perf_counter()
     try:
         # "word", not True — see _group_words for why.
-        result = _pipe(str(audio_path), return_timestamps="word")
+        result = _pipe(str(audio_path), return_timestamps="word",
+                       generate_kwargs=GENERATE_KWARGS)
     except Exception as exc:
         log.exception("ASR failed for %s", audio_path)
         raise TranscriptionFailedError(
@@ -220,6 +286,12 @@ def transcribe(audio_path: str | Path) -> Dict[str, Any]:
         result.get("chunks") if isinstance(result, dict) else None
     )
     segments = _group_words(words)
+    if looks_hallucinated(words):
+        log.warning(
+            "ASR produced %d words for %.1fs of audio (> %.0f/s) — the "
+            "model likely looped; treat this transcript with suspicion",
+            len(words), _span_seconds(words), MAX_WORDS_PER_SECOND,
+        )
     return {
         "text": text,
         "segments": segments,
@@ -230,5 +302,5 @@ def transcribe(audio_path: str | Path) -> Dict[str, Any]:
     }
 
 
-__all__ = ["_load_error_message", "_group_words", "transcribe", "warmup", "get_info", "unload", "is_loaded",
+__all__ = ["resolve_model", "available_local_models", "_load_error_message", "_group_words", "looks_hallucinated", "transcribe", "warmup", "get_info", "unload", "is_loaded",
            "model_id", "MODEL_ENV", "DEFAULT_MODEL"]

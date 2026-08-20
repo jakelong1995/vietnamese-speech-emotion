@@ -103,3 +103,52 @@ def test_unbroken_speech_is_still_split_by_the_hard_cap():
 
 def test_grouping_empty_input():
     assert asr._group_words([]) == []
+
+
+def test_repetition_loop_is_flagged():
+    """Whisper looping produced 272 words for 8.5 s of audio; that rate is
+    physically impossible for speech and must not pass as a transcript."""
+    words = [{"start": i * 0.031, "end": i * 0.031 + 0.03, "text": "ha"}
+             for i in range(272)]          # 272 words across ~8.5 s
+    assert asr.looks_hallucinated(words) is True
+
+
+def test_normal_speech_rate_is_not_flagged():
+    """~4 syllables/second is ordinary Vietnamese and must pass clean."""
+    words = [{"start": i * 0.25, "end": i * 0.25 + 0.2, "text": f"w{i}"}
+             for i in range(40)]           # 40 words across 10 s
+    assert asr.looks_hallucinated(words) is False
+
+
+def test_hallucination_check_handles_degenerate_spans():
+    assert asr.looks_hallucinated([]) is False
+    # every word stamped at the same instant -> zero span, no division blowup
+    assert asr.looks_hallucinated(
+        [{"start": 1.0, "end": 1.0, "text": "a"}] * 5) is False
+
+
+def test_local_copy_wins_over_hub_id(tmp_path, monkeypatch):
+    """A hand-downloaded model must be preferred over the repo id, whose
+    HF cache entry may be a half-written file."""
+    local = tmp_path / "PhoWhisper-small"
+    local.mkdir()
+    (local / "config.json").write_text("{}")
+    monkeypatch.setattr(asr, "LOCAL_MODEL_DIR", tmp_path)
+    assert asr.resolve_model("vinai/PhoWhisper-small") == str(local)
+
+
+def test_hub_id_passes_through_when_no_local_copy(tmp_path, monkeypatch):
+    monkeypatch.setattr(asr, "LOCAL_MODEL_DIR", tmp_path)
+    assert asr.resolve_model("vinai/PhoWhisper-medium") == "vinai/PhoWhisper-medium"
+
+
+def test_directory_without_config_is_not_treated_as_a_model(tmp_path, monkeypatch):
+    """An empty or half-downloaded directory must not shadow the Hub."""
+    (tmp_path / "PhoWhisper-small").mkdir()
+    monkeypatch.setattr(asr, "LOCAL_MODEL_DIR", tmp_path)
+    assert asr.resolve_model("vinai/PhoWhisper-small") == "vinai/PhoWhisper-small"
+
+
+def test_explicit_path_is_returned_unchanged(tmp_path, monkeypatch):
+    monkeypatch.setattr(asr, "LOCAL_MODEL_DIR", tmp_path / "elsewhere")
+    assert asr.resolve_model(str(tmp_path)) == str(tmp_path)

@@ -115,6 +115,10 @@ curl -L --http1.1 -C - -o pytorch_model.bin \
 ASR_MODEL_NAME=/path/to/PhoWhisper-small streamlit run streamlit_app.py
 ```
 
+Simpler still: drop the directory in `~/.cache/vser-models/` and the app
+finds it by name — picking `small` in the sidebar then loads the local
+copy instead of the Hub. Override the location with `SER_MODEL_DIR`.
+
 ## Run tests
 
 ```bash
