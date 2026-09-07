@@ -24,8 +24,9 @@ https://huggingface.co/spaces/<username>/vietnamese-speech-emotion
 ### Bước 2. Đợi model load (~30 giây)
 
 Lần đầu truy cập, Space tải model `MERaLiON-SER-v1` (~1.2 GB) từ HF Hub.
-Bạn sẽ thấy spinner hoặc banner "Loading model...". Sau khi load xong,
-status banner chuyển sang xanh lá.
+Bạn sẽ thấy spinner "Đang tải model MERaLiON-SER-v1...". Sau khi load
+xong, spinner biến mất và caption hiển thị `model_id`, `device`, số
+class.
 
 ### Bước 3. Upload audio
 
@@ -42,17 +43,14 @@ Có 3 cách:
 - Nói từ 3–30 giây
 - Click nút dừng (hình vuông)
 
-**🎵 Sample có sẵn**:
-- Tab "Samples"
-- Click vào 1 file mẫu trong danh sách
-
 ### Bước 4. Bấm "Analyze"
 
-Nút xanh lớn ở giữa. Đợi 1–3 giây.
+Nút primary màu xanh dưới mỗi tab. Đợi 1–3 giây (có spinner "Đang
+phân tích...").
 
 ### Bước 5. Đọc kết quả
 
-Kết quả hiện ở panel bên phải:
+Kết quả hiện ngay dưới nút Analyze, trong cùng tab:
 
 ```
 ┌────────────────────────────────────────────────────────────┐
@@ -120,59 +118,109 @@ pip install --upgrade pip
 pip install -r requirements.txt
 
 # 4. Chạy app
-python app.py
+streamlit run streamlit_app.py
 ```
 
 Output kỳ vọng:
 
 ```
-Running on local URL:  http://127.0.0.1:7860
+  You can now view your Streamlit app in your browser.
 
-To create a public link, set `share=True` in `launch()`.
+  Local URL: http://localhost:8501
+  Network URL: http://192.168.x.x:8501
 ```
 
-Mở http://127.0.0.1:7860 trong trình duyệt. Từ bước 3 trở đi giống
-phần 1 (Upload / Mic / Sample → Analyze → đọc kết quả).
+Mở http://localhost:8501 trong trình duyệt. Từ bước 3 trở đi giống
+phần 1 (Tải lên / Thu âm → Phân tích → đọc kết quả).
 
-### 2.3. Kích hoạt GPU (nếu có card NVIDIA)
+### 2.3. Tăng tốc phần cứng
 
-Mặc định `requirements.txt` cài torch CPU. Nếu bạn có GPU NVIDIA và
-muốn inference nhanh hơn 40 lần:
+App tự chọn thiết bị, **không cần cấu hình gì**. Thứ tự ưu tiên trong
+`src/device.py`: `mps` (Apple Silicon) → `cuda` (NVIDIA) → `cpu`.
+
+Caption dưới tiêu đề và ô màu xanh trong sidebar sẽ hiển thị thiết bị
+đang dùng, ví dụ `Apple GPU (Metal) (mps)`.
+
+Ép thiết bị khác bằng biến môi trường `SER_DEVICE`:
 
 ```bash
-# Trong cùng virtualenv
-pip install --upgrade torch \
-    --index-url https://download.pytorch.org/whl/cu121
+SER_DEVICE=cpu streamlit run streamlit_app.py    # auto | cpu | mps | cuda
 ```
 
-Verify:
+**Tốc độ đo thật** (cửa sổ 3 giây, MERaLiON-SER-v1):
+
+| Thiết bị | Precision | Latency |
+|---|---|---|
+| Apple Silicon (`mps`) | float32 | **430 ms** |
+| CPU | float32 | 980 ms |
+
+Đo trên M5 / 24 GB. Lần đoán **đầu tiên** sau khi load chậm hơn nhiều
+(~3 giây) vì Metal phải biên dịch kernel — từ lần thứ hai mới về con số
+trên.
+
+> **Vì sao Apple Silicon dùng float32 chứ không phải float16?**
+> Metal vẫn phải rơi về CPU với một số phép fp16, nên half precision ở
+> đây thường *chậm hơn* và đôi khi sai số. Máy Apple dùng unified memory
+> nên cũng không thiếu bộ nhớ để phải tiết kiệm. Riêng CUDA thì fp16 là
+> lãi thật nhờ tensor core.
+
+#### Nếu có GPU NVIDIA
+
+`requirements.txt` cài torch bản CPU. Muốn dùng CUDA thì cài wheel riêng:
 
 ```bash
-python -c "import torch; \
-    print('CUDA:', torch.cuda.is_available()); \
-    print('Device:', torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'N/A')"
+pip install --upgrade torch --index-url https://download.pytorch.org/whl/cu121
 ```
 
-Kỳ vọng:
-```
-CUDA: True
-Device: NVIDIA GeForce RTX 4050 Laptop GPU
+Kiểm tra:
+
+```bash
+python -c "import torch; print('CUDA:', torch.cuda.is_available())"
 ```
 
-Sau đó restart app, status banner sẽ hiển thị `device: cuda` thay vì
-`device: cpu`.
+### 2.4. Bật bóc băng (PhoWhisper)
 
-### 2.4. Yêu cầu hệ thống tối thiểu
+Gạt công tắc **"📝 Bóc băng (PhoWhisper)"** trong sidebar. Lần đầu bật
+sẽ tải model (~1 GB với bản `small`).
+
+Chọn cỡ model ngay trong sidebar, hoặc đặt biến `ASR_MODEL_NAME`. Biến
+này nhận **cả đường dẫn thư mục local** — đây là cách chắc ăn khi CDN
+Xet của HuggingFace bị đứt giữa chừng:
+
+```bash
+ASR_MODEL_NAME=~/.cache/vser-models/PhoWhisper-small \
+    streamlit run streamlit_app.py
+```
+
+App **tự ưu tiên model đã tải sẵn**: nếu có thư mục
+`~/.cache/vser-models/PhoWhisper-small/` (chứa `config.json`), chọn
+`small` trong sidebar sẽ dùng bản local đó thay vì tải lại từ Hub. Đổi
+chỗ tìm bằng biến `SER_MODEL_DIR`.
+
+Tải tay khi Xet lỗi (ép HTTP/1.1, có resume):
+
+```bash
+DEST=~/.cache/vser-models/PhoWhisper-small && mkdir -p $DEST
+for f in config.json generation_config.json preprocessor_config.json \
+         tokenizer.json tokenizer_config.json vocab.json merges.txt \
+         normalizer.json added_tokens.json special_tokens_map.json \
+         pytorch_model.bin; do
+  curl -sL --http1.1 -C - --retry 8 --retry-all-errors -o "$DEST/$f" \
+    "https://huggingface.co/vinai/PhoWhisper-small/resolve/main/$f"
+done
+```
+
+### 2.5. Yêu cầu hệ thống tối thiểu
 
 | Tài nguyên | Tối thiểu | Đề xuất |
 |---|---|---|
 | Python | 3.10 | 3.11 |
 | RAM | 4 GB | 8 GB |
 | Disk | 4 GB | 8 GB |
-| GPU | không cần | NVIDIA 6 GB VRAM |
+| GPU | không cần | Apple Silicon, hoặc NVIDIA 6 GB VRAM |
 | Internet | cần (lần đầu load model) | ổn định |
 
-### 2.5. Troubleshooting
+### 2.6. Troubleshooting
 
 **Lỗi `ModelLoadFailedError: needs >= 1.5 GiB free RAM`**:
 - Đóng Chrome tabs, Spotify, Docker, etc.
@@ -183,9 +231,9 @@ Sau đó restart app, status banner sẽ hiển thị `device: cuda` thay vì
 - Cài Microsoft C++ Build Tools
 - Hoặc skip librosa → chỉ dùng soundfile (đơn giản hơn)
 
-**Lỗi `OSError: cannot connect to localhost:7860`**:
-- Cổng 7860 đã bị app khác chiếm
-- Sửa `app.py`: đổi `server_port=7860` → `server_port=7861`
+**Lỗi `OSError: cannot connect to localhost:8501`**:
+- Cổng 8501 đã bị app khác chiếm
+- Chạy với cổng khác: `streamlit run streamlit_app.py --server.port 8502`
 
 **Lỗi model load quá chậm (~5 phút)**:
 - Internet chậm, model 1.2 GB
@@ -200,52 +248,110 @@ Ngoài UI, bạn có thể gọi model từ Python script.
 ### 3.1. Cú pháp cơ bản
 
 ```python
-from src.inference import get_adapter, predict, warmup
-from src.audio import load_audio
+from src import inference
 
-# 1. Warmup (lazy load model, ~30s CPU / ~9s GPU)
-info = warmup()
-print("Loaded:", info["model_id"], "on", info.get("device", "cpu"))
+# 1. Warmup (lazy load, ~6s trên Apple Silicon / ~30s CPU)
+info = inference.warmup()
+print("Loaded:", info["model_id"], "on", info["device"])
 
-# 2. Load audio
-waveform, sample_rate = load_audio("my_recording.wav")
-print("Duration:", len(waveform) / sample_rate, "seconds")
-
-# 3. Predict
-result = predict(("my_recording.wav", None))
-print("Top emotion:", result["label"])
-print("Confidence:", result["scores"][result["label"]])
-print("Full scores:", result["scores"])
+# 2. Predict thẳng từ đường dẫn file (tự resample về 16 kHz mono)
+result = inference.predict("my_recording.wav")
+print("Cảm xúc:", result["label"], f"{result['confidence']:.0%}")
+print("Toàn bộ phân phối:", result["class_scores"])
 ```
 
-### 3.2. Output schema
+Muốn đưa waveform có sẵn thay vì đường dẫn:
+
+```python
+from src.audio import load_audio_mono_16k
+
+waveform, sr = load_audio_mono_16k("my_recording.wav")
+result = inference.predict_waveform(waveform, sr)
+```
+
+### 3.2. Cảm xúc theo thời gian
+
+```python
+from src import timeline
+
+tl = timeline.analyze_timeline("my_recording.wav",
+                               window_sec=3.0, hop_sec=1.5)
+print(tl["summary"]["label"],
+      f"nhất quán {tl['summary']['dominant_share']:.0%}")
+for seg in tl["segments"]:
+    print(f"{seg['start']:5.1f}-{seg['end']:5.1f}s  {seg['label']}")
+```
+
+`summary` lấy **trung bình vector xác suất** rồi mới argmax, chứ không
+đếm phiếu nhãn từng cửa sổ — nhờ vậy một đoạn buồn nhè nhẹ suốt bài vẫn
+đọc ra là buồn dù không cửa sổ nào để `sad` lên đầu.
+
+### 3.3. Bóc băng
+
+```python
+from src import asr, timeline
+
+r = asr.transcribe("my_recording.wav")
+print(r["text"])
+for seg in r["segments"]:          # cụm từ, gom từ mốc mức từ
+    print(f"{seg['start']:5.1f}s  {seg['text']}")
+
+# Ghép lời thoại vào từng cửa sổ cảm xúc
+tl = timeline.analyze_timeline("my_recording.wav")
+for e in timeline.align_transcript(tl["segments"], r["segments"]):
+    print(f"{e['start']:4.1f}s  {e['label']:8} | {e['text']}")
+```
+
+### 3.4. Output schema của `predict()`
 
 ```python
 {
-    "label": str,             # top-1 emotion, e.g. "happy"
-    "scores": dict[str, float],  # {label: probability} cho 7 classes
-    "raw": str,               # trùng với label
-    "latency_ms": int,        # thời gian inference
-    "device": str,            # "cuda" hoặc "cpu"
-    "dtype": str,             # "float16" hoặc "float32"
+    "label": str,                 # top-1 sau khi chuẩn hoá về ViSEC
+                                  # ("other" nếu model chọn fearful/
+                                  #  disgusted/surprised)
+    "raw_label": str,             # nhãn thô của model (1 trong 7)
+    "confidence": float,          # xác suất của nhãn top-1
+    "class_scores": dict[str, float],   # softmax thật, 7 lớp, tổng = 1
+    "latency_ms": int,
+    "model_id": str,
+    "device": str,                # "mps" | "cuda" | "cpu"
+    "labels": list[str],
 }
 ```
 
-### 3.3. Ví dụ: batch inference
+Dict còn vài khoá metadata khác (`provider`, `language`,
+`vietnamese_verified`, `bench_score`…) — xem `_format_for_ui()` trong
+`src/inference.py`.
+
+### 3.5. Ví dụ: batch inference
 
 ```python
-from src.audio import load_audio
-from src.inference import get_adapter
-import os
+import csv
+from pathlib import Path
 
-adapter = get_adapter()  # load 1 lần, dùng nhiều lần
+from src import inference
 
-for filename in os.listdir("test_audio/"):
-    if not filename.endswith(".wav"):
-        continue
-    wav, sr = load_audio(f"test_audio/{filename}")
-    pred = adapter.predict(wav, sr)
-    print(f"{filename}: {pred['label']} ({pred['scores'][pred['label']]:.2f})")
+inference.warmup()          # load 1 lần, dùng cho cả vòng lặp
+
+with open("ket_qua.csv", "w", newline="", encoding="utf-8") as fh:
+    w = csv.writer(fh)
+    w.writerow(["file", "cam_xuc", "do_tin_cay", "ms"])
+    for path in sorted(Path("test_audio").glob("*.wav")):
+        r = inference.predict(str(path))
+        w.writerow([path.name, r["label"],
+                    f"{r['confidence']:.4f}", r["latency_ms"]])
+        print(f"{path.name}: {r['label']} ({r['confidence']:.0%})")
+```
+
+Nếu cần chạm thẳng vào adapter (bỏ qua lớp `inference`), lưu ý
+`adapter.predict()` trả về **dataclass `RawPrediction`**, không phải
+dict — truy cập bằng thuộc tính:
+
+```python
+adapter = inference.get_adapter()
+wav, sr = inference.load_audio_mono_16k("a.wav")
+pred = adapter.predict(wav, sr)
+print(pred.label, pred.confidence, pred.class_scores)   # KHÔNG phải pred["label"]
 ```
 
 Lưu ý: trong script chạy standalone `from src.inference import ...`,
@@ -260,20 +366,29 @@ cần chạy từ thư mục project root và `.venv` đã active.
 ### 4.1. Yêu cầu
 
 - Đã cài `requirements.txt`
-- Có GPU (khuyến nghị) hoặc ít nhất 4 GiB RAM free
+- Ít nhất 4 GiB RAM free
 - Internet để tải ViSEC dataset (~367 MB, lần đầu)
+
+> ⚠️ **`bench/run_meralion.py` chưa hỗ trợ MPS** — nó chỉ nhận
+> `--device cpu` hoặc `--device cuda`. Trên máy Apple Silicon,
+> `--device auto` sẽ ra `cpu`, tức benchmark **không dùng GPU Metal**
+> dù app thì có. Con số 40.25% trong README được đo trên máy CUDA khác
+> (xem `device`/`dtype` trong `bench/results/scores.json`).
 
 ### 4.2. Chạy
 
 ```bash
 # Đảm bảo đang ở project root và đã activate .venv
+
+# Trên Apple Silicon / máy không có NVIDIA (chạy CPU, ~8-10 phút):
+.venv/bin/python bench/run_meralion.py --per-class 100 --device cpu
+
+# Trên máy có GPU NVIDIA (~5 phút):
 .venv/bin/python bench/run_meralion.py \
-    --per-class 100 \
-    --device cuda \
-    --dtype float16
+    --per-class 100 --device cuda --dtype float16
 ```
 
-Output:
+Output (ví dụ trên máy CUDA):
 
 ```
 Loading MERaLiON-SER-v1 on cuda (float16)…
@@ -340,7 +455,7 @@ Library `librosa` + `soundfile` trong `src/audio.py` hỗ trợ:
 - Sample rate: bất kỳ (sẽ được resample về 16 kHz mono)
 - Channels: stereo sẽ được downmix thành mono
 - Duration: 1–60 giây (quá ngắn hoặc quá dài có thể kết quả kém)
-- File size: ≤ 50 MB (giới hạn Gradio)
+- File size: ≤ 200 MB (giới hạn mặc định `st.file_uploader` của Streamlit)
 
 **Tip audio quality**:
 - Dùng microphone ngoài sẽ tốt hơn mic laptop.
@@ -374,12 +489,17 @@ Model có một số pattern thường gặp trên ViSEC:
 
 Nếu muốn kiểm tra model có hoạt động không:
 
-1. Upload 1 file audio nói "Tôi rất vui" với giọng vui rõ ràng.
-2. Kỳ vọng: top emotion = `happy` với confidence > 50%.
-3. Nếu kết quả khác, có thể:
-   - Audio quá nhỏ / quá to
-   - Có nhiều tiếng ồn
-   - Giọng nói đặc trưng vùng miền mà model chưa thấy nhiều
+1. Upload 1 file audio giọng **trung tính** (đọc tin tức chẳng hạn).
+2. Kỳ vọng: `neutral` với confidence cao (~80-90%). Đây là lớp mạnh
+   nhất của model.
+3. Sau đó thử giọng vui / buồn rõ rệt. **Đừng ngạc nhiên nếu vẫn ra
+   `neutral`** — model chỉ đạt 40.25% trên ViSEC và `happy`/`sad` là
+   hai lớp yếu nhất (F1 ≈ 0.31-0.33), rất hay bị nuốt thành `neutral`.
+   Đó là giới hạn đã biết của model, không phải lỗi cài đặt.
+4. Nếu ngay cả giọng trung tính cũng ra kết quả lạ, mới nên nghi:
+   - Audio quá nhỏ / quá to (clipping)
+   - Nhiều tiếng ồn nền
+   - File không thật sự chứa tiếng nói
 
 ---
 
@@ -443,9 +563,11 @@ Có, nhưng cần effort:
 
 ### Q7. Có API endpoint không? Có webhook không?
 
-Hiện tại chỉ có UI Gradio. Gradio tự động tạo REST API ở
-`/predict` endpoint cho developer tích hợp. Webhook chưa có — nếu cần,
-sửa `inference.predict()` thêm side-effect (HTTP POST đến URL).
+Hiện tại chỉ có UI Streamlit — không có REST API tự động (khác với
+Gradio). Muốn gọi model từ script/service khác, import trực tiếp
+`src.inference.predict()` (xem mục 3 ở trên) hoặc tự viết một wrapper
+FastAPI mỏng gọi cùng hàm đó. Webhook chưa có — nếu cần, sửa
+`inference.predict()` thêm side-effect (HTTP POST đến URL).
 
 ### Q8. Làm sao đóng góp?
 

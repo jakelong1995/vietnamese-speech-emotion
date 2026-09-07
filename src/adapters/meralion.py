@@ -44,6 +44,8 @@ from typing import Any, Dict, Optional
 
 import numpy as np
 
+from ..device import describe as describe_device
+from ..device import resolve_device, resolve_dtype
 from .base import BaseAdapter, ModelInfo, RawPrediction
 
 
@@ -163,9 +165,13 @@ class MeralionAdapter(BaseAdapter):
     model_id = "MERaLiON/MERaLiON-SER-v1"
 
     def __init__(self, cache_dir: Optional[Path] = None,
-                 min_free_gib: float = 1.5) -> None:
+                 min_free_gib: float = 1.5,
+                 device: Optional[str] = None) -> None:
         super().__init__(cache_dir=cache_dir)
         self._min_free_gib = min_free_gib
+        #: ``None`` = follow ``SER_DEVICE`` / auto-detect at load time.
+        self._device_pref = device
+        self._dtype = None
         self.sample_rate = 16000
         self.labels = ["neutral", "happy", "sad", "angry",
                        "fearful", "disgusted", "surprised"]
@@ -200,23 +206,29 @@ class MeralionAdapter(BaseAdapter):
                          "required_gib": self._min_free_gib},
             )
 
-        log.info("loading MERaLiON-SER-v1 from %s", self.model_id)
+        device = resolve_device(self._device_pref)
+        log.info("loading MERaLiON-SER-v1 from %s onto %s",
+                 self.model_id, device)
         t0 = time.perf_counter()
         try:
             import torch  # noqa: F401
             from transformers import (
                 AutoModelForAudioClassification, AutoFeatureExtractor,
             )
+            dtype = resolve_dtype(device)
             self._model = AutoModelForAudioClassification.from_pretrained(
                 self.model_id,
                 trust_remote_code=True,
                 cache_dir=str(self._cache_dir),
+                dtype=dtype,
             )
             self._fe = AutoFeatureExtractor.from_pretrained(
                 self.model_id,
                 trust_remote_code=True,
                 cache_dir=str(self._cache_dir),
             )
+            if device != "cpu":
+                self._model.to(device)
             self._model.eval()
         except Exception as exc:
             from ..exceptions import ModelLoadFailedError
@@ -225,14 +237,16 @@ class MeralionAdapter(BaseAdapter):
                 details={"model_id": self.model_id},
             ) from exc
         self._load_seconds = time.perf_counter() - t0
-        self._device = "cpu"
+        self._device = device
+        self._dtype = dtype
         try:
             self._id2label = {
                 int(k): str(v) for k, v in self._model.config.id2label.items()
             }
         except Exception:
             self._id2label = {i: n for i, n in enumerate(self.labels)}
-        log.info("MERaLiON-SER-v1 loaded in %.1fs, %d classes",
+        log.info("MERaLiON-SER-v1 loaded on %s (%s) in %.1fs, %d classes",
+                 self._device, str(dtype).split(".")[-1],
                  self._load_seconds, len(self._id2label))
 
     def unload(self) -> None:
@@ -261,10 +275,22 @@ class MeralionAdapter(BaseAdapter):
         try:
             import torch
             inputs = self._fe(waveform, sampling_rate=sample_rate, return_tensors="pt")
+            # Move inputs onto the accelerator. Only *floating* tensors get
+            # cast to the model dtype — attention masks are integer tensors
+            # and casting them to fp16 would corrupt them.
+            if self._device != "cpu":
+                inputs = {
+                    k: (v.to(self._device, dtype=self._dtype)
+                        if torch.is_floating_point(v) else v.to(self._device))
+                    for k, v in inputs.items()
+                }
             with torch.no_grad():
                 out = self._model(**inputs)
             logits = out["logits"] if isinstance(out, dict) else out.logits
-            probs_t = torch.softmax(logits, dim=-1)[0].cpu().numpy()
+            # Softmax in fp32: on MPS/fp16 a 7-way softmax over large
+            # logits can underflow and hand back NaNs, which would trip
+            # the no-fabrication tests.
+            probs_t = torch.softmax(logits.float(), dim=-1)[0].cpu().numpy()
         except Exception as exc:
             log.exception("MERaLiON predict failed")
             from ..exceptions import ModelLoadFailedError
@@ -312,11 +338,10 @@ class MeralionAdapter(BaseAdapter):
                 "role": "vietnamese_partial",
                 "language": "multilingual",
                 "english_trained": False,
-                "vietnamese_verified": "limited_secondary",
+                "vietnamese_verified": "best_effort",
                 "benchmark": (
-                    "Smoke-tested on ViSEC (4 clips, 1 per class). Full "
-                    "benchmark blocked by host RAM. See "
-                    "docs/MODEL_OUTPUT_AUDIT.md."
+                    "Full 400-clip balanced ViSEC bench: 40.25% accuracy / "
+                    "40.70% macro-F1. See docs/BENCHMARK.md."
                 ),
                 "recommendation": (
                     "Whisper-medium + LoRA + ECAPA-TDNN head trained on "
@@ -325,5 +350,7 @@ class MeralionAdapter(BaseAdapter):
                     "on idiomatic Vietnamese emotional prosody."
                 ),
                 "patched_meta_tensor_bug": True,
+                "accelerator": describe_device(self._device),
+                "dtype": str(self._dtype).split(".")[-1] if self._dtype else None,
             },
         )

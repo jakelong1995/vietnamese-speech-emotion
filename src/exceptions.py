@@ -1,4 +1,4 @@
-"""Domain exceptions for the single-model Gradio Space."""
+"""Domain exceptions for the single-model Streamlit app."""
 from __future__ import annotations
 
 from typing import Any
@@ -26,3 +26,9 @@ class InvalidAudioError(AppError):
 
 class AudioTooShortError(AppError):
     code = "AUDIO_TOO_SHORT"
+
+
+class TranscriptionFailedError(AppError):
+    """Raised when the ASR model cannot load or cannot decode audio."""
+
+    code = "TRANSCRIPTION_FAILED"

@@ -1,4 +1,4 @@
-"""Tests for the inference wrapper that the Gradio UI calls.
+"""Tests for the inference wrapper that the Streamlit UI calls.
 
 These tests use a stubbed adapter so we can verify the public surface
 without loading real weights.

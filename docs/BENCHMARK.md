@@ -1,7 +1,7 @@
 # Benchmark — `hustep-lab/ViSEC` 4-class
 
 `bench/results/scores.json` is the source of truth for the
-single adapter the Gradio UI loads. This document explains the
+single adapter the Streamlit UI loads. This document explains the
 methodology and what each entry means.
 
 ## Other docs
