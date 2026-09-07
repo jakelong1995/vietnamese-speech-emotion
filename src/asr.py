@@ -30,6 +30,7 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from .audio import load_audio_mono_16k
 from .device import describe as describe_device
 from .device import resolve_device, resolve_dtype
 from .exceptions import TranscriptionFailedError
@@ -268,10 +269,18 @@ def transcribe(audio_path: str | Path) -> Dict[str, Any]:
     _load()
     assert _pipe is not None
 
+    # Decode here rather than handing the pipeline a path: its bundled
+    # ffmpeg_read pipes the file in on stdin, which MP4/m4a cannot be read
+    # from (the container needs seekable input). Going through
+    # load_audio_mono_16k also guarantees ASR and the emotion layers see the
+    # exact same samples, which is what makes timeline alignment meaningful.
+    waveform, sample_rate = load_audio_mono_16k(str(audio_path))
+
     t0 = time.perf_counter()
     try:
         # "word", not True — see _group_words for why.
-        result = _pipe(str(audio_path), return_timestamps="word",
+        result = _pipe({"raw": waveform, "sampling_rate": sample_rate},
+                       return_timestamps="word",
                        generate_kwargs=GENERATE_KWARGS)
     except Exception as exc:
         log.exception("ASR failed for %s", audio_path)

@@ -112,6 +112,23 @@ def _predict_bytes_to_tempfile(audio_bytes: bytes, suffix: str) -> Path:
         return Path(tmp.name)
 
 
+def _analyze_and_render(audio_bytes: bytes, suffix: str, opts: dict) -> None:
+    """Run the enabled layers over one upload, surfacing failures inline.
+
+    The emotion layer was the only one without error handling — model
+    loads and ASR already had it — so a file the decoders rejected
+    escaped as a raw traceback and blanked the page instead of leaving
+    the user somewhere they could pick another file.
+    """
+    tmp = _predict_bytes_to_tempfile(audio_bytes, suffix)
+    try:
+        render_results(analyze(tmp, **opts))
+    except Exception as exc:  # noqa: BLE001
+        st.error(f"Không phân tích được file này: {inference.format_error(exc)}")
+    finally:
+        tmp.unlink(missing_ok=True)
+
+
 # --------------------------------------------------------------------------
 # Rendering
 # --------------------------------------------------------------------------
@@ -365,22 +382,15 @@ def main() -> None:
         if uploaded is not None:
             st.audio(uploaded)
             if st.button("Phân tích", key="go_upload", type="primary"):
-                tmp = _predict_bytes_to_tempfile(
-                    uploaded.getvalue(), Path(uploaded.name).suffix or ".wav")
-                try:
-                    render_results(analyze(tmp, **opts))
-                finally:
-                    tmp.unlink(missing_ok=True)
+                _analyze_and_render(
+                    uploaded.getvalue(),
+                    Path(uploaded.name).suffix or ".wav", opts)
 
     with tab_mic:
         recorded = st.audio_input("Thu âm giọng nói (~5–30 giây)", key="mic")
         if recorded is not None and st.button("Phân tích", key="go_mic",
                                               type="primary"):
-            tmp = _predict_bytes_to_tempfile(recorded.getvalue(), ".wav")
-            try:
-                render_results(analyze(tmp, **opts))
-            finally:
-                tmp.unlink(missing_ok=True)
+            _analyze_and_render(recorded.getvalue(), ".wav", opts)
 
 
 if __name__ == "__main__":
